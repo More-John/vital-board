@@ -1,62 +1,76 @@
-import { useState, useEffect } from 'react'
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
-import { auth, googleProvider } from '../firebase/config'
-import { useNavigate } from 'react-router-dom'
-
+import { useState, useEffect } from 'react';
+import { 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { auth, googleProvider } from '../firebase/config';
+import { useNavigate } from 'react-router-dom';
 
 export function useAuth() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
-  // Listen for authentication state changes
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  // Auth state observer (removed auto-redirect)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user)
-      setLoading(false)
-      if (!user) navigate('/login')
-    })
+      setUser(user);
+      setLoading(false);
+      // Removed the forced redirect here
+    });
+    return unsubscribe;
+  }, []); // Removed navigate from dependencies
 
-    return unsubscribe
-  }, [navigate])
-
-  // Function to sign in with Google
+  // Google Sign-In
   const signInWithGoogle = async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      // You can access additional user info here:
-      const credential = googleProvider.credentialFromResult(result);
-      const token = credential.accessToken;
-      const user = result.user;
-      return user;
+      navigate('/dashboard'); // Redirect only after successful login
+      return result.user;
     } catch (error) {
-      const errorCode = error.code;
-      const errorMessage = error.message;
-      const email = error.customData.email;
-      const credential = googleProvider.credentialFromError(error);
+      setError(error.message);
       throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // Function to log in a user with email and password
-
+  // Email/Password Login
   const login = async (email, password) => {
+    setLoading(true);
+    setError(null);
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/dashboard'); // Redirect only after successful login
     } catch (error) {
-      throw error
+      setError(error.message);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-  }
-  // Function to log out the user
+  };
+
+  // Logout
   const logout = async () => {
     try {
-      await signOut(auth)
+      await signOut(auth);
+      navigate('/login'); // Redirect to login page after logout
     } catch (error) {
-      console.error('Logout error:', error)
+      setError(error.message);
     }
-  }
+  };
 
-  return { user, loading, login, logout, signInWithGoogle }
+  return { 
+    user, 
+    loading, 
+    error,
+    login, 
+    logout, 
+    signInWithGoogle 
+  };
 }
